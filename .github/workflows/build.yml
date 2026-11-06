@@ -16,7 +16,11 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache flex git-core gnupg gperf libssl-dev libxml2-utils lz4 zip unzip libncurses5 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi device-tree-compiler lz4 liblz4-tool u-boot-tools llvm lld clang
-
+     
+    - name: Patch dtc flags for modern host compiler
+      run: |
+        sed -i 's/\$(call if_changed,dtc)/\$(call if_changed,dtc) -f/g' scripts/Makefile.dtbo
+    
     - name: Build Kernel Binary
       run: |
         export ARCH=arm64
