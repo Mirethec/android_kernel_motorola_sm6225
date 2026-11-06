@@ -1,0 +1,42 @@
+name: Build Custom Moto E7 Plus Kernel
+
+on:
+  workflow_dispatch: # This adds a manual "Run" button to your GitHub Actions page
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+      with:
+        ref: lineage-24.0
+
+    - name: Install Compiler Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc bison build-essential ccache flex git-core gnupg gperf libssl-dev libxml2-utils lz4 zip unzip libncurses5
+
+    - name: Download Clang Toolchain
+      run: |
+        git clone --depth=1 https://github.com clang-compiler
+
+    - name: Build Kernel Binary
+      run: |
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export CROSS_COMPILE=$(pwd)/clang-compiler/bin/aarch64-linux-gnu-
+        export CROSS_COMPILE_ARM32=$(pwd)/clang-compiler/bin/arm-linux-gnueabi-
+        export CC=$(pwd)/clang-compiler/bin/clang
+        
+        # Configure for the Motorola Bengal platform
+        make O=out bengal-perf_defconfig
+        
+        # Compile using all available CPU threads on the cloud server
+        make -j$(nproc) O=out
+
+    - name: Upload Kernel Output
+      uses: actions/upload-artifact@v4
+      with:
+        name: Moto-E7-Plus-Overclocked-Kernel
+        path: out/arch/arm64/boot/Image.gz-dtb
