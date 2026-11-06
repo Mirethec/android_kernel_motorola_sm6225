@@ -17,11 +17,12 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache flex git-core gnupg gperf libssl-dev libxml2-utils lz4 zip unzip libncurses5
 
-    - name: Download Clang Toolchain Tarball
-      run: |
-        wget https://googlesource.com -O clang.tar.gz
-        mkdir -p $(pwd)/clang-compiler
-        tar -xzf clang.tar.gz -C $(pwd)/clang-compiler
+    - name: Set up Clang Compiler
+      uses: egor-tensin/setup-clang@v1
+      with:
+        version: 14
+
+       
 
     - name: Build Kernel Binary
       run: |
