@@ -15,35 +15,22 @@ jobs:
     - name: Install Compiler Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache flex git-core gnupg gperf libssl-dev libxml2-utils lz4 zip unzip libncurses5 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi device-tree-compiler lz4 liblz4-tool u-boot-tools
-
-    - name: Download Official AOSP Clang Toolchain
-      run: |
-        git clone --depth=1 https://googlesource.com clone-clang
-        git clone --depth=1 https://googlesource.com clone-gcc64
-        git clone --depth=1 https://googlesource.com clone-gcc32
+        sudo apt-get install -y bc bison build-essential ccache flex git-core gnupg gperf libssl-dev libxml2-utils lz4 zip unzip libncurses5 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi device-tree-compiler lz4 liblz4-tool u-boot-tools llvm lld clang
 
     - name: Build Kernel Binary
       run: |
         export ARCH=arm64
         export SUBARCH=arm64
-        
-        # Point the build variables directly to Google's specialized binary trees
-        export CLANG_PATH=$(pwd)/clone-clang/clang-r450784d
-        export GCC64_PATH=$(pwd)/clone-gcc64
-        export GCC32_PATH=$(pwd)/clone-gcc32
-        
-        export PATH=$CLANG_PATH/bin:$GCC64_PATH/bin:$GCC32_PATH/bin:$PATH
-        
-        export CROSS_COMPILE=aarch64-linux-android-
-        export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
         export CC=clang
-        export CLANG_TRIPLE=aarch64-linux-gnu-
         export KCFLAGS="-Wno-error"
         
-        # Configure and build
-        make O=out vendor/sm6225-perf_defconfig || make O=out vendor/bengal-perf_defconfig
-        make -j$(nproc) O=out
+        # Configure the device kernel tree using LLVM
+        make O=out LLVM=1 vendor/sm6225-perf_defconfig || make O=out LLVM=1 vendor/bengal-perf_defconfig
+        
+        # Compile and link using the native LLVM environment
+        make -j$(nproc) O=out LLVM=1 LLVM_IAS=1
 
     - name: Upload Kernel Output
       uses: actions/upload-artifact@v4
