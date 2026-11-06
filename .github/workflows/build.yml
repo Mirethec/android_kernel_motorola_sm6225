@@ -13,9 +13,12 @@ jobs:
         ref: lineage-24.0
 
     - name: Install Compiler Dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache flex git-core gnupg gperf libssl-dev libxml2-utils lz4 zip unzip libncurses5 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi device-tree-compiler lz4 liblz4-tool u-boot-tools llvm lld clang
+        sudo apt-get install -y --no-install-recommends \
+          bc bison build-essential ccache flex git-core gnupg gperf libssl-dev lz4 zlib1g-dev
      
     - name: Patch dtc flags for modern host compiler
       run: |
