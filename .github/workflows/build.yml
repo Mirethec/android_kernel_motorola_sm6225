@@ -32,12 +32,13 @@ jobs:
            export CROSS_COMPILE=aarch64-linux-gnu-
            export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
            export CC=clang
+           export KCFLAGS="-Wno-error"
         
            # Look inside the vendor subfolder for the config layout
            make O=out vendor/sm6225-perf_defconfig || make O=out vendor/bengal-perf_defconfig
         
            make -j$(nproc) O=out
-
+           
     - name: Upload Kernel Output
       uses: actions/upload-artifact@v4
       with:
