@@ -1,46 +1,58 @@
-name: Build Custom Moto E7 Plus Kernel
+name: Build Motorola SM6225 Kernel
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main, master ]
 
 jobs:
-  build-kernel:
+  build:
     runs-on: ubuntu-22.04
     steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
-      with:
-        ref: lineage-24.0
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Install Compiler Dependencies
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends \
-          bc bison build-essential ccache flex git-core gnupg gperf libssl-dev lz4 zlib1g-dev
-     
-    - name: Patch dtc flags for modern host compiler
-      run: |
-        sed -i 's/\$(call if_changed,dtc)/\$(call if_changed,dtc) -f/g' scripts/Makefile.dtbo
-    
-    - name: Build Kernel Binary
-      run: |
-        export ARCH=arm64
-        export SUBARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-gnu-
-        export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-        export CC=clang
-        export KCFLAGS="-Wno-error"
-        
-        # Configure the device kernel tree using LLVM
-        make O=out LLVM=1 vendor/sm6225-perf_defconfig || make O=out LLVM=1 vendor/bengal-perf_defconfig
-        
-        # Compile and link using the native LLVM environment
-        make -j$(nproc) O=out LLVM=1 LLVM_IAS=1
+      - name: Install Compiler Dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ccache flex git-core gnupg gperf \
+            libssl-dev lz4 zlib1g-dev python3 python-is-python3
 
-    - name: Upload Kernel Output
-      uses: actions/upload-artifact@v4
-      with:
-        name: Moto-E7-Plus-Overclocked-Kernel
-        path: out/arch/arm64/boot/Image.gz-dtb
+      - name: Clone Clang Toolchain
+        run: |
+          git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -depth=1 toolchain/clang
+
+      - name: Setup Environment PATH
+        run: |
+          CLANG_BIN="$(pwd)/toolchain/clang/$(ls toolchain/clang/ | head -n 1)/bin"
+          echo "$CLANG_BIN" >> $GITHUB_PATH
+
+      - name: Patch dtc flags for modern host compiler
+        run: |
+          if [ -f scripts/Makefile.dtbo ]; then
+            sed -i 's/\$(call if_changed,dtc)/\$(call if_changed,dtc) -f/g' scripts/Makefile.dtbo
+          fi
+
+      - name: Build Kernel
+        run: |
+          mkdir -p out
+          export ARCH=arm64
+          export SUBARCH=arm64
+
+          # Uses your exact Motorola SM6225 defconfig target
+          make O=out CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 vendor/sm6225-perf_defconfig
+
+          # Compile the kernel and device trees
+          make -j$(nproc) O=out CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sm6225-kernel-output
+          path: |
+            out/arch/arm64/boot/Image
+            out/arch/arm64/boot/dts/vendor/qcom/*.dtb
+            out/arch/arm64/boot/dtbo.img
