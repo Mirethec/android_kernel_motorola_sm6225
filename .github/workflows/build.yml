@@ -1,7 +1,7 @@
 name: Build Custom Moto E7 Plus Kernel
 
 on:
-  workflow_dispatch: # This adds a manual "Run" button to your GitHub Actions page
+  workflow_dispatch:
 
 jobs:
   build-kernel:
@@ -17,9 +17,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache flex git-core gnupg gperf libssl-dev libxml2-utils lz4 zip unzip libncurses5
 
-    - name: Download Clang Toolchain
+    - name: Download Clang Toolchain Tarball
       run: |
-        git clone --depth=1 https://github.com clang-compiler
+        wget https://googlesource.com -O clang.tar.gz
+        mkdir -p $(pwd)/clang-compiler
+        tar -xzf clang.tar.gz -C $(pwd)/clang-compiler
 
     - name: Build Kernel Binary
       run: |
@@ -29,10 +31,7 @@ jobs:
         export CROSS_COMPILE_ARM32=$(pwd)/clang-compiler/bin/arm-linux-gnueabi-
         export CC=$(pwd)/clang-compiler/bin/clang
         
-        # Configure for the Motorola Bengal platform
         make O=out bengal-perf_defconfig
-        
-        # Compile using all available CPU threads on the cloud server
         make -j$(nproc) O=out
 
     - name: Upload Kernel Output
