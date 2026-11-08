@@ -67,18 +67,23 @@ jobs:
             arch/arm64/configs/vendor/ext_config/guam-default.config
 
           make O=out ARCH=arm64 olddefconfig
-     
+      
       - name: Diagnose Android Vendor Hooks
         run: |
-          echo "=== Vendor hook definitions ==="
-          grep -Rns "android_vh_set_memory_ro" include drivers kernel arch || true
+          echo "=== Vendor hook source files ==="
+          find . -iname '*vendor*hook*' -o -iname '*hooks*.c'
 
-          echo "=== Vendor hook implementation ==="
-          grep -Rns "CREATE_TRACE_POINTS\|vendor_hooks.o" drivers/android kernel || true
+          echo "=== Hook definitions ==="
+          grep -Rns 'android_vh_set_memory_ro' include drivers kernel arch || true
 
-          echo "=== Relevant kernel configuration ==="
+          echo "=== Hook build configuration ==="
           grep -E 'CONFIG_ANDROID_VENDOR_HOOKS|CONFIG_TRACEPOINTS|CONFIG_ANDROID' out/.config || true
-     
+
+          echo "=== Android directory Makefile ==="
+          if [ -f drivers/android/Makefile ]; then
+            cat drivers/android/Makefile
+          fi
+      
       - name: Build Kernel
         run: |
           make -j"$(nproc)" O=out \
