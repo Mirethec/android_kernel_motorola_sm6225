@@ -36,6 +36,7 @@ jobs:
             gcc-aarch64-linux-gnu \
             gcc-arm-linux-gnueabi \
             device-tree-compiler \
+            llvm \
             zip unzip
 
       - name: Show Compiler Version
