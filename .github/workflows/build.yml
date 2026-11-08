@@ -81,7 +81,20 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             Image.gz dtbs
-      
+     
+      - name: Check Motorola Device Trees
+        run: |
+          echo "=== Motorola base DTB ==="
+          find out -name "bengal-moto-base.dtb"
+
+          echo "=== Guam overlays ==="
+          find out -name "bengal-guam-*.dtbo"
+
+          echo "=== All generated DTB and DTBO files ==="
+          find out/arch/arm64/boot/dts/vendor/qcom \
+            -type f \( -name "*.dtb" -o -name "*.dtbo" \) \
+            2>/dev/null  
+     
       - name: Check Device Tree Outputs
         run: |
           echo "=== DTB files ==="
