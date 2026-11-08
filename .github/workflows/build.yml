@@ -81,7 +81,21 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             Image.gz dtbs
+      
+      - name: Check Device Tree Outputs
+        run: |
+          echo "=== DTB files ==="
+          find out -type f -name "*.dtb"
 
+          echo "=== DTBO files ==="
+          find out -type f -name "*.dtbo"
+
+          echo "=== Device tree configuration ==="
+          grep -E "CONFIG_GUAM_DTB|CONFIG_BUILD_ARM64_DT_OVERLAY" out/.config || true
+
+          echo "=== Boot directory ==="
+          find out/arch/arm64/boot -maxdepth 4 -type f
+      
       - name: Collect Kernel Files
         run: |
           mkdir -p artifacts
