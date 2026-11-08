@@ -45,28 +45,15 @@ jobs:
       - name: Configure Kernel
         run: |
           mkdir -p out
-
           make O=out ARCH=arm64 vendor/bengal_defconfig
-
           scripts/kconfig/merge_config.sh \
             -m -O out \
             out/.config \
             arch/arm64/configs/vendor/ext_config/guam-default.config
-
           make O=out ARCH=arm64 olddefconfig
-          make O=out ARCH=arm64 \
-            CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            vendor/bengal_defconfig
 
-          scripts/kconfig/merge_config.sh \
-            -m -O out \
-            out/.config \
-            arch/arm64/configs/vendor/ext_config/guam-default.config
-
-          make O=out ARCH=arm64 olddefconfig
+          echo "=== Checking Android vendor hooks ==="
+          grep CONFIG_ANDROID_VENDOR_HOOKS out/.config
       
       - name: Diagnose Android Vendor Hooks
         run: |
