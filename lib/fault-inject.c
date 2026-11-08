@@ -104,19 +104,56 @@ static inline bool fail_stacktrace(struct fault_attr *attr)
  * This code is stolen from failmalloc-1.0
  * http://www.nongnu.org/failmalloc/
  */
-
-bool should_fail(struct fault_attr *attr, ssize_t size)
+  bool should_fail(struct fault_attr *attr, ssize_t size)
 {
 	if (in_task()) {
 		unsigned int fail_nth = READ_ONCE(current->fail_nth);
 
-		WRITE_ONCE(current->fail_nth, fail_nth - 1);
-        if (fail_nth == 1)
-            goto fail;
+		if (fail_nth) {
+			WRITE_ONCE(current->fail_nth, fail_nth - 1);
+
+			if (fail_nth == 1)
+				goto fail;
 
 			return false;
 		}
 	}
+
+	/* No need to check any other properties if the probability is 0 */
+	if (attr->probability == 0)
+		return false;
+
+	if (attr->task_filter && !fail_task(attr, current))
+		return false;
+
+	if (atomic_read(&attr->times) == 0)
+		return false;
+
+	if (atomic_read(&attr->space) > size) {
+		atomic_sub(size, &attr->space);
+		return false;
+	}
+
+	if (attr->interval > 1) {
+		if (--attr->count < attr->interval)
+			return false;
+		attr->count = 0;
+	}
+
+	if (attr->probability <= prandom_u32() % 100)
+		return false;
+
+	if (!fail_stacktrace(attr))
+		return false;
+
+fail:
+	fail_dump(attr);
+
+	if (atomic_read(&attr->times) != -1)
+		atomic_dec_not_zero(&attr->times);
+
+	return true;
+}
 
 	/* No need to check any other properties if the probability is 0 */
 	if (attr->probability == 0)
