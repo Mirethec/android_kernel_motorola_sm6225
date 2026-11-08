@@ -1,58 +1,93 @@
-name: Build Motorola SM6225 Kernel
+
+name: Build Moto E7 Plus Kernel
 
 on:
   workflow_dispatch:
+    inputs:
+      defconfig:
+        description: "Kernel defconfig path"
+        required: true
+        type: string
+      build_name:
+        description: "Kernel build name"
+        required: false
+        default: "Guam-Custom"
+        type: string
+
   push:
-    branches: [ main, master ]
+    branches:
+      - main
 
 jobs:
   build:
+    name: Build Kernel for Moto E7 Plus
     runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
 
-      - name: Install Compiler Dependencies
-        env:
-          DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            bc bison build-essential ccache flex git-core gnupg gperf \
-            libssl-dev lz4 zlib1g-dev python3 python-is-python3
+          sudo apt-get install -y \
+            bc bison build-essential \
+            ccache curl flex git \
+            libssl-dev libelf-dev \
+            libncurses-dev lld llvm clang \
+            python3 python3-pip \
+            gcc-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi \
+            device-tree-compiler \
+            zip unzip
 
-      - name: Clone Clang Toolchain
-        run: |
-          git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 --depth=1 toolchain/clang
-
-      - name: Setup Environment PATH
-        run: |
-          CLANG_BIN="$(pwd)/toolchain/clang/$(ls toolchain/clang/ | head -n 1)/bin"
-          echo "$CLANG_BIN" >> $GITHUB_PATH
-
-      - name: Patch dtc flags for modern host compiler
-        run: |
-          if [ -f scripts/Makefile.dtbo ]; then
-            sed -i 's/\$(call if_changed,dtc)/\$(call if_changed,dtc) -f/g' scripts/Makefile.dtbo
-          fi
-
-      - name: Build Kernel
+      - name: Configure Kernel
+        env:
+          DEFCONFIG: ${{ inputs.defconfig }}
         run: |
           mkdir -p out
-          export ARCH=arm64
-          export SUBARCH=arm64
+          make O=out ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            "$DEFCONFIG"
 
-          # Uses your exact Motorola SM6225 defconfig target
-          make O=out CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1 vendor/sm6225-perf_defconfig
+      - name: Build Kernel
+        env:
+          BUILD_NAME: ${{ inputs.build_name }}
+        run: |
+          make -j"$(nproc)" O=out \
+            ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            Image.gz dtbs
 
-          # Compile the kernel and device trees
-          make -j$(nproc) O=out CC=clang LD=ld.lld LLVM=1 LLVM_IAS=1
+      - name: Collect Kernel Files
+        run: |
+          mkdir -p artifacts
+
+          find out/arch/arm64/boot -type f \
+            \( -name "Image" \
+            -o -name "Image.gz" \
+            -o -name "Image.gz-dtb" \
+            -o -name "*.dtb" \
+            -o -name "*.dtbo" \) \
+            -exec cp --parents {} artifacts/ \;
+
+          if [ -z "$(find artifacts -type f)" ]; then
+            echo "No kernel output found!"
+            exit 1
+          fi
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sm6225-kernel-output
-          path: |
-            out/arch/arm64/boot/Image
-            out/arch/arm64/boot/dts/vendor/qcom/*.dtb
-            out/arch/arm64/boot/dtbo.img
+          name: Moto-E7-Plus-${{ inputs.build_name || 'Guam-Custom' }}
+          path: artifacts/
+          if-no-files-found: error
+          compression-level: 9
