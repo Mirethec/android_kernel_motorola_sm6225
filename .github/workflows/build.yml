@@ -1,13 +1,8 @@
-
 name: Build Moto E7 Plus Kernel
 
 on:
   workflow_dispatch:
     inputs:
-      defconfig:
-        description: "Kernel defconfig path"
-        required: true
-        type: string
       build_name:
         description: "Kernel build name"
         required: false
@@ -16,7 +11,7 @@ on:
 
   push:
     branches:
-      - main
+      - lineage-24.0
 
 jobs:
   build:
@@ -43,21 +38,28 @@ jobs:
             device-tree-compiler \
             zip unzip
 
+      - name: Show Compiler Version
+        run: clang --version
+
       - name: Configure Kernel
-        env:
-          DEFCONFIG: ${{ inputs.defconfig }}
         run: |
           mkdir -p out
+
           make O=out ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            "$DEFCONFIG"
+            vendor/bengal_defconfig
+
+          scripts/kconfig/merge_config.sh \
+            -m -O out \
+            out/.config \
+            arch/arm64/configs/vendor/ext_config/guam-default.config
+
+          make O=out ARCH=arm64 olddefconfig
 
       - name: Build Kernel
-        env:
-          BUILD_NAME: ${{ inputs.build_name }}
         run: |
           make -j"$(nproc)" O=out \
             ARCH=arm64 \
