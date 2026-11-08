@@ -155,41 +155,6 @@ fail:
 	return true;
 }
 
-	/* No need to check any other properties if the probability is 0 */
-	if (attr->probability == 0)
-		return false;
-
-	if (attr->task_filter && !fail_task(attr, current))
-		return false;
-
-	if (atomic_read(&attr->times) == 0)
-		return false;
-
-	if (atomic_read(&attr->space) > size) {
-		atomic_sub(size, &attr->space);
-		return false;
-	}
-
-	if (attr->interval > 1) {
-		attr->count++;
-		if (attr->count % attr->interval)
-			return false;
-	}
-
-	if (attr->probability <= prandom_u32() % 100)
-		return false;
-
-	if (!fail_stacktrace(attr))
-		return false;
-
-fail:
-	fail_dump(attr);
-
-	if (atomic_read(&attr->times) != -1)
-		atomic_dec_not_zero(&attr->times);
-
-	return true;
-}
 EXPORT_SYMBOL_GPL(should_fail);
 
 #ifdef CONFIG_FAULT_INJECTION_DEBUG_FS
