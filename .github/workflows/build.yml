@@ -94,6 +94,9 @@ jobs:
           find out/arch/arm64/boot/dts/vendor/qcom \
             -type f \( -name "*.dtb" -o -name "*.dtbo" \) \
             2>/dev/null  
+
+          echo "=== Motorola DT configuration ==="
+          grep -E 'CONFIG_(MMI_DEVICE_DTBS|BUILD_ARM64_DT_OVERLAY|GUAM_DTB)' out/.config || true  
      
       - name: Check Device Tree Outputs
         run: |
