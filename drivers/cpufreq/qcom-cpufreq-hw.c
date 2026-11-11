@@ -466,9 +466,13 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 		src = (data & GENMASK(31, 30)) >> 30;
 		lval = data & GENMASK(7, 0);
 		core_count = CORE_COUNT_VAL(data);
+		
+		pr_info("CPU_HW_LUT: row=%d raw_freq=0x%08x src=%u lval=%u cores=%u\n",
+        i, data, src, lval, core_count);
 
 		data = readl_relaxed(base_volt + i * lut_row_size);
 		volt = (data & GENMASK(11, 0)) * 1000;
+		pr_info("CPU_HW_LUT: row=%d raw_volt=0x%08x\n", i, volt);
 		vc = data & GENMASK(21, 16);
 
 		if (src)
@@ -477,10 +481,7 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 			c->table[i].frequency = c->cpu_hw_rate / 1000;
 
 		cur_freq = c->table[i].frequency;
-		if (i == (lut_max_entries - 1)) {
-		        c->table[i].frequency = 2016000;
-		        cur_freq = c->table[i].frequency;
-	    }
+		
          
 		dev_dbg(dev, "index=%d freq=%d, core_count %d\n",
 			i, c->table[i].frequency, core_count);
