@@ -77,7 +77,7 @@ jobs:
             --enable KSU \
             --enable KPROBES \
             --enable KPROBE_EVENTS \
-            --enable KSU_KPROBE_HOOKS
+            --enable KSU_KPROBES_HOOK
 
           make O=out ARCH=arm64 \
             CC=clang \
@@ -88,7 +88,8 @@ jobs:
           grep -E 'CONFIG_KSU|CONFIG_KPROBE' out/.config
 
           grep -qx 'CONFIG_KSU=y' out/.config
-          grep -qx 'CONFIG_KSU_KPROBE_HOOKS=y' out/.config
+          grep -qx 'CONFIG_KPROBES=y' out/.config
+          grep -qx 'CONFIG_KSU_KPROBES_HOOK=y' out/.config
 
       
       - name: Diagnose Android Vendor Hooks
