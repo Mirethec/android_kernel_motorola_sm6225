@@ -43,12 +43,24 @@ jobs:
         run: clang --version
 
       
+      
       - name: Integrate KernelSU Next
         run: |
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
+          set -euo pipefail
+
+          curl -fLSs \
+            "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" \
+            -o /tmp/ksu-setup.sh
+
+          bash /tmp/ksu-setup.sh legacy
 
           echo "=== KernelSU Next version ==="
-          git -C KernelSU log -1 --oneline
+          git -C KernelSU-Next log -1 --oneline
+
+          echo "=== Checking integration ==="
+          test -f drivers/kernelsu/Kconfig
+          ls -la drivers/kernelsu
+
 
       
       - name: Configure Kernel
