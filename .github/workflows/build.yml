@@ -42,18 +42,42 @@ jobs:
       - name: Show Compiler Version
         run: clang --version
 
+      
+      - name: Integrate KernelSU Next
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
+
+          echo "=== KernelSU Next version ==="
+          git -C KernelSU log -1 --oneline
+
+      
       - name: Configure Kernel
         run: |
           mkdir -p out
-          make O=out ARCH=arm64 vendor/bengal_defconfig
-          scripts/kconfig/merge_config.sh \
-            -m -O out \
-            out/.config \
-            arch/arm64/configs/vendor/ext_config/guam-default.config
-          make O=out ARCH=arm64 olddefconfig
 
-          echo "=== Checking Android vendor hooks ==="
-          grep CONFIG_ANDROID_VENDOR_HOOKS out/.config
+          ARCH=arm64 scripts/kconfig/merge_config.sh \
+            -m -O out \
+            arch/arm64/configs/vendor/bengal-perf_defconfig \
+            arch/arm64/configs/vendor/ext_config/moto-bengal.config \
+            arch/arm64/configs/vendor/ext_config/guam-default.config
+
+          scripts/config --file out/.config \
+            --enable KSU \
+            --enable KPROBES \
+            --enable KPROBE_EVENTS \
+            --enable KSU_KPROBE_HOOKS
+
+          make O=out ARCH=arm64 \
+            CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            olddefconfig
+
+          echo "=== KernelSU configuration ==="
+          grep -E 'CONFIG_KSU|CONFIG_KPROBE' out/.config
+
+          grep -qx 'CONFIG_KSU=y' out/.config
+          grep -qx 'CONFIG_KSU_KPROBE_HOOKS=y' out/.config
+
       
       - name: Diagnose Android Vendor Hooks
         run: |
