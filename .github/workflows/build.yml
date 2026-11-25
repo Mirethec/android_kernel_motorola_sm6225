@@ -9,20 +9,15 @@ on:
         default: "Guam-Custom"
         type: string
 
+      enable_ksu:
+        description: "Enable KernelSU Next"
+        required: false
+        default: true
+        type: boolean
+
   push:
     branches:
       - lineage-24.0
-
-jobs:
-  build:
-    name: Build Kernel for Moto E7 Plus
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install Dependencies
         run: |
@@ -45,6 +40,7 @@ jobs:
       
       
       - name: Integrate KernelSU Next
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ksu }}
         run: |
           set -euo pipefail
 
@@ -65,6 +61,7 @@ jobs:
       
       - name: Configure Kernel
         run: |
+          set -euo pipefail
           mkdir -p out
 
           ARCH=arm64 scripts/kconfig/merge_config.sh \
@@ -73,23 +70,31 @@ jobs:
             arch/arm64/configs/vendor/ext_config/moto-bengal.config \
             arch/arm64/configs/vendor/ext_config/guam-default.config
 
-          scripts/config --file out/.config \
-            --enable KSU \
-            --enable KPROBES \
-            --enable KPROBE_EVENTS \
-            --enable KSU_KPROBES_HOOK
+          if [ "${{ github.event_name != 'workflow_dispatch' || inputs.enable_ksu }}" = "true" ]; then
+            scripts/config --file out/.config \
+              --enable KSU \
+              --enable KPROBES \
+              --enable KPROBE_EVENTS \
+              --enable KSU_KPROBES_HOOK
+          else
+            scripts/config --file out/.config --disable KSU
+          fi
 
           make O=out ARCH=arm64 \
             CC=clang \
+            LLVM=1 \
             CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             olddefconfig
 
           echo "=== KernelSU configuration ==="
-          grep -E 'CONFIG_KSU|CONFIG_KPROBE' out/.config
+          grep -E 'CONFIG_KSU|CONFIG_KPROBE' out/.config || true
 
-          grep -qx 'CONFIG_KSU=y' out/.config
-          grep -qx 'CONFIG_KPROBES=y' out/.config
-          grep -qx 'CONFIG_KSU_KPROBES_HOOK=y' out/.config
+          if [ "${{ github.event_name != 'workflow_dispatch' || inputs.enable_ksu }}" = "true" ]; then
+            grep -qx 'CONFIG_KSU=y' out/.config
+            grep -qx 'CONFIG_KPROBES=y' out/.config
+            grep -qx 'CONFIG_KSU_KPROBES_HOOK=y' out/.config
+          fi
 
       
       - name: Diagnose Android Vendor Hooks
@@ -165,6 +170,11 @@ jobs:
             echo "No kernel output found!"
             exit 1
           fi
+          
+          cp out/.config artifacts/kernel.config
+          cp out/System.map artifacts/
+          clang --version > artifacts/compiler.txt
+          git rev-parse HEAD > artifacts/source-commit.txt
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
