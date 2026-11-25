@@ -1,3 +1,4 @@
+
 name: Build Moto E7 Plus Kernel
 
 on:
@@ -8,7 +9,6 @@ on:
         required: false
         default: "Guam-Custom"
         type: string
-
       enable_ksu:
         description: "Enable KernelSU Next"
         required: false
@@ -18,6 +18,20 @@ on:
   push:
     branches:
       - lineage-24.0
+
+jobs:
+  build:
+    name: Build Kernel for Moto E7 Plus
+    runs-on: ubuntu-22.04
+
+    env:
+      ENABLE_KSU: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ksu }}
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install Dependencies
         run: |
@@ -31,16 +45,13 @@ on:
             gcc-aarch64-linux-gnu \
             gcc-arm-linux-gnueabi \
             device-tree-compiler \
-            llvm \
             zip unzip
 
       - name: Show Compiler Version
         run: clang --version
 
-      
-      
       - name: Integrate KernelSU Next
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ksu }}
+        if: ${{ env.ENABLE_KSU == 'true' }}
         run: |
           set -euo pipefail
 
@@ -53,12 +64,9 @@ on:
           echo "=== KernelSU Next version ==="
           git -C KernelSU-Next log -1 --oneline
 
-          echo "=== Checking integration ==="
           test -f drivers/kernelsu/Kconfig
           ls -la drivers/kernelsu
 
-
-      
       - name: Configure Kernel
         run: |
           set -euo pipefail
@@ -70,19 +78,21 @@ on:
             arch/arm64/configs/vendor/ext_config/moto-bengal.config \
             arch/arm64/configs/vendor/ext_config/guam-default.config
 
-          if [ "${{ github.event_name != 'workflow_dispatch' || inputs.enable_ksu }}" = "true" ]; then
+          if [ "$ENABLE_KSU" = "true" ]; then
             scripts/config --file out/.config \
               --enable KSU \
               --enable KPROBES \
               --enable KPROBE_EVENTS \
               --enable KSU_KPROBES_HOOK
           else
-            scripts/config --file out/.config --disable KSU
+            scripts/config --file out/.config \
+              --disable KSU
           fi
 
           make O=out ARCH=arm64 \
             CC=clang \
             LLVM=1 \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             olddefconfig
@@ -90,29 +100,25 @@ on:
           echo "=== KernelSU configuration ==="
           grep -E 'CONFIG_KSU|CONFIG_KPROBE' out/.config || true
 
-          if [ "${{ github.event_name != 'workflow_dispatch' || inputs.enable_ksu }}" = "true" ]; then
+          if [ "$ENABLE_KSU" = "true" ]; then
             grep -qx 'CONFIG_KSU=y' out/.config
             grep -qx 'CONFIG_KPROBES=y' out/.config
             grep -qx 'CONFIG_KSU_KPROBES_HOOK=y' out/.config
           fi
 
-      
       - name: Diagnose Android Vendor Hooks
         run: |
           echo "=== Vendor hook source files ==="
           find . -iname '*vendor*hook*' -o -iname '*hooks*.c'
 
           echo "=== Hook definitions ==="
-          grep -Rns 'android_vh_set_memory_ro' include drivers kernel arch || true
+          grep -Rns 'android_vh_set_memory_ro' \
+            include drivers kernel arch || true
 
-          echo "=== Hook build configuration ==="
-          grep -E 'CONFIG_ANDROID_VENDOR_HOOKS|CONFIG_TRACEPOINTS|CONFIG_ANDROID' out/.config || true
+          echo "=== Hook configuration ==="
+          grep -E 'CONFIG_ANDROID_VENDOR_HOOKS|CONFIG_TRACEPOINTS|CONFIG_ANDROID' \
+            out/.config || true
 
-          echo "=== Android directory Makefile ==="
-          if [ -f drivers/android/Makefile ]; then
-            cat drivers/android/Makefile
-          fi
-      
       - name: Build Kernel
         run: |
           make -j"$(nproc)" O=out \
@@ -123,8 +129,8 @@ on:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             Image.gz dtbs
-     
-      - name: Check Motorola Device Trees
+
+      - name: Check Device Tree Outputs
         run: |
           echo "=== Motorola base DTB ==="
           find out -name "bengal-moto-base.dtb"
@@ -132,28 +138,10 @@ on:
           echo "=== Guam overlays ==="
           find out -name "bengal-guam-*.dtbo"
 
-          echo "=== All generated DTB and DTBO files ==="
-          find out/arch/arm64/boot/dts/vendor/qcom \
-            -type f \( -name "*.dtb" -o -name "*.dtbo" \) \
-            2>/dev/null  
-
-          echo "=== Motorola DT configuration ==="
-          grep -E 'CONFIG_(MMI_DEVICE_DTBS|BUILD_ARM64_DT_OVERLAY|GUAM_DTB)' out/.config || true  
-     
-      - name: Check Device Tree Outputs
-        run: |
-          echo "=== DTB files ==="
-          find out -type f -name "*.dtb"
-
-          echo "=== DTBO files ==="
-          find out -type f -name "*.dtbo"
-
           echo "=== Device tree configuration ==="
-          grep -E "CONFIG_GUAM_DTB|CONFIG_BUILD_ARM64_DT_OVERLAY" out/.config || true
+          grep -E 'CONFIG_MMI_DEVICE_DTBS|CONFIG_GUAM_DTB|CONFIG_BUILD_ARM64_DT_OVERLAY' \
+            out/.config || true
 
-          echo "=== Boot directory ==="
-          find out/arch/arm64/boot -maxdepth 4 -type f
-      
       - name: Collect Kernel Files
         run: |
           mkdir -p artifacts
@@ -166,15 +154,13 @@ on:
             -o -name "*.dtbo" \) \
             -exec cp --parents {} artifacts/ \;
 
-          if [ -z "$(find artifacts -type f)" ]; then
-            echo "No kernel output found!"
-            exit 1
-          fi
-          
           cp out/.config artifacts/kernel.config
           cp out/System.map artifacts/
           clang --version > artifacts/compiler.txt
           git rev-parse HEAD > artifacts/source-commit.txt
+          echo "$ENABLE_KSU" > artifacts/kernelsu-enabled.txt
+
+          test -s out/arch/arm64/boot/Image
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
