@@ -18,6 +18,7 @@ on:
   push:
     branches:
       - lineage-24.0
+      - guam-touchscreen-fix
 
 jobs:
   build:
@@ -89,6 +90,11 @@ jobs:
               --disable KSU
           fi
 
+          # Experimental: build Guam touchscreen drivers into the kernel.
+          for symbol in INPUT_HIMAX_V3_MMI INPUT_TOUCHSCREEN_ILI_9882_MMI TOUCHSCREEN_CHIPONE_TDDI TOUCHSCREEN_NT36xxx_HOSTDL_SPI_MMI; do
+            scripts/config --file out/.config --enable "$symbol"
+          done
+
           make O=out ARCH=arm64 \
             CC=clang \
             LLVM=1 \
@@ -96,6 +102,9 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             olddefconfig
+
+          echo "=== Touchscreen configuration ==="
+          grep -Ei 'CONFIG_.*(HIMAX|ILI_9882|CHIPONE|NT36XXX|TOUCHSCREEN_MMI)' out/.config || true
 
           echo "=== KernelSU configuration ==="
           grep -E 'CONFIG_KSU|CONFIG_KPROBE' out/.config || true
@@ -128,7 +137,7 @@ jobs:
             CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            Image.gz dtbs
+            Image.gz dtbs modules
 
       - name: Check Device Tree Outputs
         run: |
@@ -154,6 +163,7 @@ jobs:
             -o -name "*.dtbo" \) \
             -exec cp --parents {} artifacts/ \;
 
+          find out -type f -name '*.ko' -exec cp --parents {} artifacts/ \;
           cp out/.config artifacts/kernel.config
           cp out/System.map artifacts/
           clang --version > artifacts/compiler.txt
