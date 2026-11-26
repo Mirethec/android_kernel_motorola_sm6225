@@ -26,11 +26,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        probe_mode: ${{ fromJSON(github.event_name == 'push' && '["baseline","kprobes","kprobe-events"]' || '["requested"]') }}
+        probe_mode: ${{ fromJSON(github.event_name == 'push' && '["integrated-disabled","integrated-enabled"]' || '["requested"]') }}
 
     env:
       PROBE_MODE: ${{ matrix.probe_mode }}
-      ENABLE_KSU: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_ksu }}
+      ENABLE_KSU: ${{ matrix.probe_mode == 'integrated-enabled' || (github.event_name == 'workflow_dispatch' && inputs.enable_ksu) }}
 
     steps:
       - name: Checkout Source
@@ -81,7 +81,7 @@ jobs:
         run: clang --version
 
       - name: Integrate KernelSU Next
-        if: ${{ env.ENABLE_KSU == 'true' }}
+        if: ${{ env.ENABLE_KSU == 'true' || matrix.probe_mode == 'integrated-disabled' }}
         run: |
           set -euo pipefail
 
@@ -96,6 +96,8 @@ jobs:
 
           test -f drivers/kernelsu/Kconfig
           ls -la drivers/kernelsu
+          git diff > /tmp/ksu-source.diff
+          git -C KernelSU-Next rev-parse HEAD > /tmp/ksu-revision
 
       - name: Configure Kernel
         run: |
@@ -119,6 +121,7 @@ jobs:
             baseline) scripts/config --file out/.config --disable KPROBES --disable KPROBE_EVENTS ;;
             kprobes) scripts/config --file out/.config --enable KPROBES --disable KPROBE_EVENTS ;;
             kprobe-events) scripts/config --file out/.config --enable KPROBES --enable KPROBE_EVENTS ;;
+            integrated-disabled|integrated-enabled) scripts/config --file out/.config --enable KPROBES --enable KPROBE_EVENTS ;;
             requested) ;;
             *) exit 1 ;;
           esac
@@ -139,6 +142,9 @@ jobs:
           diff -u "$RUNNER_TEMP/guam-original.config" out/.config > /tmp/config.diff || true
           cat /tmp/config.diff
 
+          if [ "$PROBE_MODE" = "integrated-disabled" ]; then
+            grep -qx "# CONFIG_KSU is not set" out/.config
+          fi
           echo "=== KernelSU configuration ==="
           grep -E 'CONFIG_KSU|CONFIG_KPROBE' out/.config || true
 
@@ -200,6 +206,9 @@ jobs:
           cp out/.config artifacts/kernel.config
           cp "$RUNNER_TEMP/guam-original.config" artifacts/original.config
           cp /tmp/config.diff artifacts/config.diff
+          if [ -f /tmp/ksu-source.diff ]; then
+            cp /tmp/ksu-source.diff /tmp/ksu-revision artifacts/
+          fi
           cp out/System.map out/Module.symvers artifacts/
           cp out/include/config/kernel.release artifacts/
           find out -name "*himax*.ko" -print
