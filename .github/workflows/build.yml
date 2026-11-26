@@ -90,10 +90,21 @@ jobs:
               --disable KSU
           fi
 
-          # Experimental: build Guam touchscreen drivers into the kernel.
-          for symbol in INPUT_HIMAX_V3_MMI INPUT_TOUCHSCREEN_ILI_9882_MMI TOUCHSCREEN_CHIPONE_TDDI TOUCHSCREEN_NT36xxx_HOSTDL_SPI_MMI; do
-            scripts/config --file out/.config --enable "$symbol"
-          done
+          # Diagnostic: preserve Guam modular drivers and permit vendor module loading.
+          scripts/config --file out/.config \
+            --set-str LOCALVERSION "-perf" \
+            --disable LOCALVERSION_AUTO \
+            --enable MODULES \
+            --enable MODVERSIONS \
+            --enable MODULE_UNLOAD \
+            --enable MODULE_SIG \
+            --disable MODULE_SIG_FORCE \
+            --enable FW_LOADER \
+            --enable FW_LOADER_USER_HELPER \
+            --enable FW_LOADER_USER_HELPER_FALLBACK \
+            --module INPUT_HIMAX_V3_MMI \
+            --enable INPUT_HIMAX_V3_MMI_IC_HX83102D \
+            --enable INPUT_TOUCHSCREEN_HIMAX_V3_MMI_0FLASH
 
           make O=out ARCH=arm64 \
             CC=clang \
@@ -105,6 +116,13 @@ jobs:
 
           echo "=== Touchscreen configuration ==="
           grep -Ei 'CONFIG_.*(HIMAX|ILI_9882|CHIPONE|NT36XXX|TOUCHSCREEN_MMI)' out/.config || true
+
+          echo "=== Module and firmware configuration ==="
+          grep -E 'CONFIG_(LOCALVERSION|MODULE|MODVERSIONS|FW_LOADER)' out/.config || true
+          for setting in CONFIG_INPUT_HIMAX_V3_MMI=m CONFIG_INPUT_HIMAX_V3_MMI_IC_HX83102D=y CONFIG_INPUT_TOUCHSCREEN_HIMAX_V3_MMI_0FLASH=y CONFIG_MODVERSIONS=y CONFIG_FW_LOADER_USER_HELPER_FALLBACK=y; do
+            grep -Fxq "$setting" out/.config
+          done
+          grep -Fxq '# CONFIG_MODULE_SIG_FORCE is not set' out/.config
 
           echo "=== KernelSU configuration ==="
           grep -E 'CONFIG_KSU|CONFIG_KPROBE' out/.config || true
@@ -165,7 +183,11 @@ jobs:
 
           find out -type f -name '*.ko' -exec cp --parents {} artifacts/ \;
           cp out/.config artifacts/kernel.config
-          cp out/System.map artifacts/
+          cp out/System.map out/Module.symvers artifacts/
+          cp out/include/config/kernel.release artifacts/
+          find out -name "*himax*.ko" -print
+          find out -name himax_v3_mmi.ko | grep -q .
+          find out -name himax_v3_mmi_hx83102d.ko | grep -q .
           clang --version > artifacts/compiler.txt
           git rev-parse HEAD > artifacts/source-commit.txt
           echo "$ENABLE_KSU" > artifacts/kernelsu-enabled.txt
