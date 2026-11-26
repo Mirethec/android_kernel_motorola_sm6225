@@ -30,14 +30,17 @@ jobs:
 
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Preserve original config and checkout ROM source
         run: |
           cp .github/guam-original.config "$RUNNER_TEMP/guam-original.config"
-          git checkout --detach 1da2d0861244d324cfff0fcb31dec374dd94436b
+          git fetch --no-tags origin 1da2d0861244d324cfff0fcb31dec374dd94436b
+          git cat-file -e 'FETCH_HEAD^{tree}'
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = 1da2d0861244d324cfff0fcb31dec374dd94436b
           git submodule update --init --recursive
 
       - name: Install Dependencies
