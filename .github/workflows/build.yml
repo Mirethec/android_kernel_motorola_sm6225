@@ -17,15 +17,19 @@ on:
 
   push:
     branches:
-      - lineage-24.0
       - guam-touchscreen-fix
 
 jobs:
   build:
     name: Build Kernel for Moto E7 Plus
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        probe_mode: ${{ fromJSON(github.event_name == 'push' && '["baseline","kprobes","kprobe-events"]' || '["requested"]') }}
 
     env:
+      PROBE_MODE: ${{ matrix.probe_mode }}
       ENABLE_KSU: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_ksu }}
 
     steps:
@@ -111,6 +115,14 @@ jobs:
               --disable KSU
           fi
 
+          case "$PROBE_MODE" in
+            baseline) scripts/config --file out/.config --disable KPROBES --disable KPROBE_EVENTS ;;
+            kprobes) scripts/config --file out/.config --enable KPROBES --disable KPROBE_EVENTS ;;
+            kprobe-events) scripts/config --file out/.config --enable KPROBES --enable KPROBE_EVENTS ;;
+            requested) ;;
+            *) exit 1 ;;
+          esac
+
           make O=out ARCH=arm64 \
             CC=clang \
             LLVM=1 \
@@ -195,13 +207,24 @@ jobs:
           clang --version > artifacts/compiler.txt
           git rev-parse HEAD > artifacts/source-commit.txt
           echo "$ENABLE_KSU" > artifacts/kernelsu-enabled.txt
+          echo "$PROBE_MODE" > artifacts/probe-mode.txt
+          awk '$2 == "module_layout" {print $1}' out/Module.symvers > artifacts/module-layout-crc.txt
 
           test -s out/arch/arm64/boot/Image
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Moto-E7-Plus-${{ inputs.build_name || 'Guam-Custom' }}
+          name: Moto-E7-Plus-${{ inputs.build_name || 'Guam-Custom' }}-${{ matrix.probe_mode }}
           path: artifacts/
           if-no-files-found: error
           compression-level: 9
+
+      - name: Enforce original module ABI CRC
+        run: |
+          actual=$(cat artifacts/module-layout-crc.txt)
+          echo "Mode: $PROBE_MODE; expected: 0x7b99c8ef; actual: $actual"
+          if [ "$actual" != "0x7b99c8ef" ]; then
+            echo "::error::module_layout CRC mismatch; diagnostic artifact only, do not flash"
+            exit 1
+          fi
