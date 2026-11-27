@@ -114,7 +114,10 @@ jobs:
               --enable KSU_KPROBES_HOOK
           else
             scripts/config --file out/.config \
-              --disable KSU
+              --disable KSU \
+              --disable KSU_KPROBES_HOOK \
+              --disable KSU_MANUAL_HOOK \
+              --disable KSU_SYSCALL_TABLE_HOOK
           fi
 
           case "$PROBE_MODE" in
@@ -143,7 +146,11 @@ jobs:
           cat /tmp/config.diff
 
           if [ "$PROBE_MODE" = "integrated-disabled" ]; then
-            grep -qx "# CONFIG_KSU is not set" out/.config
+            if ! grep -qx "# CONFIG_KSU is not set" out/.config; then
+              echo "::error::KernelSU remains enabled in integrated-disabled mode"
+              grep -E '^CONFIG_KSU|^# CONFIG_KSU' out/.config || true
+              exit 1
+            fi
           fi
           echo "=== KernelSU configuration ==="
           grep -E 'CONFIG_KSU|CONFIG_KPROBE' out/.config || true
