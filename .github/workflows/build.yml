@@ -137,6 +137,24 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             olddefconfig
 
+          # KernelSU's legacy Kconfig sets "default y", so olddefconfig can
+          # re-enable it even after scripts/config --disable KSU.
+          # Reapply explicit disable after Kconfig resolution and run olddefconfig
+          # again to normalize dependent options.
+          if [ "$PROBE_MODE" = "integrated-disabled" ]; then
+            scripts/config --file out/.config \
+              --disable KSU \
+              --disable KSU_KPROBES_HOOK \
+              --disable KSU_MANUAL_HOOK \
+              --disable KSU_SYSCALL_TABLE_HOOK
+            make O=out ARCH=arm64 \
+              CC=clang LLVM=1 \
+              CLANG_TRIPLE=aarch64-linux-gnu- \
+              CROSS_COMPILE=aarch64-linux-gnu- \
+              CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+              olddefconfig
+          fi
+
           echo "=== Touchscreen configuration ==="
           grep -Ei 'CONFIG_.*(HIMAX|ILI_9882|CHIPONE|NT36XXX|TOUCHSCREEN_MMI)' out/.config || true
 
